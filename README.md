@@ -20,7 +20,6 @@ This project serves as a **Workflow Demonstration** to highlight:
 2. **The Workflow Simulator (`simulator.ts`):** A TypeScript engine that mimics hardware GPS units. It utilizes the **OSRM Routing API** to drive realistic, road-accurate paths through **South Frontenac**.
 3. **The Live Dashboard (`index.html`):** A responsive Leaflet.js interface that renders "breadcrumb" pathing, custom vehicle iconography, and live performance metrics.
 
----
 
 ## Running the Demo
 
@@ -46,13 +45,9 @@ deno run --allow-net simulator.ts
 
 ```
 
----
-
 ## Key Features Displayed
 
 * **Live Breadcrumbs:** Visualizes the exact route taken by the vehicle.
 * **Dynamic Status:** Icons change color and popups update based on whether the unit is "Active" or "Idle."
 * **Auto-Follow Map:** The interface automatically pans to keep the active unit in view.
 * **Signal Monitoring:** Units visually "fade out" on the map if data transmission is interrupted.
-
----
