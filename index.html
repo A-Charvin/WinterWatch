@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Snowplow Live Tracker</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 100vh; width: 100%; }
+        body { margin: 0; }
+        /* This animates the marker move so it doesn't "snap" */
+        .leaflet-marker-icon {
+            transition: transform 0.5s linear !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+   <script>
+    const map = L.map('map').setView([44.4082, -76.5989], 12); 
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap © CARTO'
+    }).addTo(map);
+
+    const truckIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/6932/6932290.png',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16]
+    });
+
+    const plows = {};
+
+    // Ensure the connection is established
+    const socket = new WebSocket(`ws://${window.location.host}/ws`);
+
+    function calcDist(p1, p2) {
+        return map.distance(p1, p2) / 1000; // Returns Kilometers
+    }
+
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        // 1. EXTRACT ALL DATA: We need to pull the new fields out here
+        const { id, name, lat, lng, speed, status, reset, timestamp } = data;
+
+        if (!plows[id]) {
+            plows[id] = {
+                marker: L.marker([lat, lng], { icon: truckIcon }).addTo(map),
+                path: L.polyline([], { color: '#2196F3', weight: 5 }).addTo(map),
+                totalDist: 0,
+                lastUpdate: timestamp
+            };
+        }
+
+        const p = plows[id];
+        const oldPos = p.marker.getLatLng();
+        const newPos = L.latLng(lat, lng);
+
+        // 2. ODOMETER LOGIC: Update the distance counter
+        if (reset) {
+            p.path.setLatLngs([]);
+            p.totalDist = 0;
+        } else {
+            p.totalDist += calcDist(oldPos, newPos);
+        }
+
+        p.marker.setLatLng(newPos);
+        p.path.addLatLng(newPos);
+        p.lastUpdate = timestamp;
+        
+        // Auto-follow logic
+        map.panTo(newPos);
+
+        // 3. STATUS & SPEED COLOR LOGIC
+        if (p.marker._icon) {
+            p.marker._icon.style.filter = (status === "Active") 
+                ? "hue-rotate(90deg) brightness(0.8)" // Greenish for Active
+                : "none"; // Original for Idle/Transport
+        }
+
+        // 4. POPUP UPDATE: This is where you see the "Missing" info
+        p.marker.bindPopup(`
+            <div style="font-family: sans-serif;">
+                <b style="font-size: 1.2em;">${name}</b><br>
+                <hr>
+                <b>Speed:</b> ${speed || 0} km/h<br>
+                <b>Odometer:</b> ${p.totalDist.toFixed(2)} km<br>
+                <b>Status:</b> <span style="color: ${status === 'Active' ? 'green' : 'orange'}">${status}</span>
+            </div>
+        `).openPopup();
+    };
+
+    // Heartbeat for "Offline" status
+    setInterval(() => {
+        const now = Date.now();
+        Object.values(plows).forEach(p => {
+            if (now - p.lastUpdate > 5000 && p.marker._icon) { 
+                p.marker._icon.style.filter = "grayscale(100%) opacity(0.5)";
+                p.marker.setPopupContent("<b>OFFLINE / NO SIGNAL</b>");
+            }
+        });
+    }, 3000);
+
+    socket.onopen = () => console.log("Connected to Snowplow Server");
+</script>
+
+</body>
+</html>
