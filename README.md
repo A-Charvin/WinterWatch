@@ -34,7 +34,7 @@ deno run --allow-net --allow-read server.ts
 
 ### 2. Access the Dashboard
 
-Open `index.html` in any modern web browser. The map will initialize, centered on the South Frontenac region.
+Open `http://localhost:8000/` in any modern web browser. The map will initialize, centered on the South Frontenac region.
 
 ### 3. Deploy the Simulation
 
