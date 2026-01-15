@@ -2,7 +2,7 @@
 
 ### Real-Time Telemetry Workflow & Dashboad Demonstration
 
-**WinterWatch** is a technical proof of concept demonstrating an end to end real time data pipeline for municipal fleet management. 
+**WinterWatch** is a technical proof of concept demonstrating an end to end real time data pipeline for fleet management. 
 This prototype showcases how vehicle telemetry, specifically GPS data from snowplows can be ingested, processed, and visualized in a live operational environment.
 
 ## Demonstration Goals
