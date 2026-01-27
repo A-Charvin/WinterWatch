@@ -1,109 +1,413 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Snowplow Live Tracker</title>
+    <title>WinterWatch Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        #map { height: 100vh; width: 100%; }
-        body { margin: 0; }
-        /* This animates the marker move so it doesn't "snap" */
-        .leaflet-marker-icon {
-            transition: transform 0.5s linear !important;
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; 
+            display: flex; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            height: 100vh; 
+            overflow: hidden;
+            background: #f5f7fa;
+        }
+        
+        #sidebar { 
+            width: 380px; 
+            background: linear-gradient(135deg, #1a2332 0%, #232d3e 100%);
+            color: white; 
+            overflow-y: auto; 
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        
+        #header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            flex-shrink: 0;
+        }
+        
+        #header h1 {
+            margin: 0 0 15px 0;
+            font-size: 1.8em;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .stats-summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .stat-box {
+            background: rgba(255,255,255,0.08);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+        }
+        
+        .stat-label {
+            font-size: 0.75em;
+            color: #b0bec5;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        
+        .stat-value {
+            font-size: 1.4em;
+            font-weight: 700;
+        }
+        
+        #plow-list {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        
+        .plow-card {
+            background: rgba(255,255,255,0.07);
+            backdrop-filter: blur(10px);
+            padding: 14px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid #3498db;
+        }
+        
+        .plow-card:hover {
+            background: rgba(255,255,255,0.12);
+            transform: translateX(4px);
+        }
+        
+        .plow-card.selected {
+            background: rgba(52, 211, 153, 0.2);
+            border-color: rgba(52, 211, 153, 0.4);
+            border-left-color: #34d399;
+            box-shadow: 0 0 12px rgba(52, 211, 153, 0.2);
+        }
+        
+        .plow-card.offline {
+            opacity: 0.5;
+            border-left-color: #95a5a6;
+        }
+        
+        .plow-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .plow-name {
+            font-weight: 600;
+            font-size: 1em;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75em;
+            padding: 4px 10px;
+            background: rgba(46, 204, 113, 0.2);
+            border-radius: 20px;
+            color: #2ecc71;
+        }
+        
+        .status-badge.paused {
+            background: rgba(241, 196, 15, 0.2);
+            color: #f1c40f;
+        }
+        
+        .status-badge.offline {
+            background: rgba(149, 165, 166, 0.2);
+            color: #bdc3c7;
+        }
+        
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-badge.offline .status-dot,
+        .status-badge.paused .status-dot {
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .plow-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 0.85em;
+        }
+        
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .stat-label-small {
+            color: #b0bec5;
+            font-size: 0.8em;
+        }
+        
+        .stat-value-small {
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        #map { 
+            flex-grow: 1;
+            background: #f5f7fa;
+        }
+        
+        .color-0 { --color: #3498db; }
+        .color-1 { --color: #e74c3c; }
+        .color-2 { --color: #2ecc71; }
+        .color-3 { --color: #f39c12; }
+        .color-4 { --color: #9b59b6; }
+        .color-5 { --color: #1abc9c; }
+        .color-6 { --color: #e67e22; }
+        .color-7 { --color: #34495e; }
+        .color-8 { --color: #16a085; }
+        .color-9 { --color: #c0392b; }
+        
+        .plow-card.color-0 { border-left-color: #3498db; }
+        .plow-card.color-1 { border-left-color: #e74c3c; }
+        .plow-card.color-2 { border-left-color: #2ecc71; }
+        .plow-card.color-3 { border-left-color: #f39c12; }
+        .plow-card.color-4 { border-left-color: #9b59b6; }
+        .plow-card.color-5 { border-left-color: #1abc9c; }
+        .plow-card.color-6 { border-left-color: #e67e22; }
+        .plow-card.color-7 { border-left-color: #34495e; }
+        .plow-card.color-8 { border-left-color: #16a085; }
+        .plow-card.color-9 { border-left-color: #c0392b; }
+
+        /* Scrollbar styling */
+        #plow-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        #plow-list::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+        #plow-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+        }
+        #plow-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
         }
     </style>
 </head>
 <body>
+    <div id="sidebar">
+        <div id="header">
+            <h1>Winter Watch</h1>
+            <div class="stats-summary">
+                <div class="stat-box">
+                    <div class="stat-label">Active Plows</div>
+                    <div class="stat-value" id="active-count">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total km</div>
+                    <div class="stat-value" id="total-km">0</div>
+                </div>
+            </div>
+        </div>
+        <div id="plow-list"></div>
+    </div>
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-   <script>
-    const map = L.map('map').setView([44.4082, -76.5989], 12); 
+    <script>
+        const map = L.map('map').setView([44.4082, -76.5989], 11); 
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap © CARTO'
-    }).addTo(map);
-
-    const truckIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/6932/6932290.png',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-        popupAnchor: [0, -16]
-    });
-
-    const plows = {};
-
-    // Ensure the connection is established
-    const socket = new WebSocket(`ws://${window.location.host}/ws`);
-
-    function calcDist(p1, p2) {
-        return map.distance(p1, p2) / 1000; // Returns Kilometers
-    }
-
-    socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        // 1. EXTRACT ALL DATA: We need to pull the new fields out here
-        const { id, name, lat, lng, speed, status, reset, timestamp } = data;
-
-        if (!plows[id]) {
-            plows[id] = {
-                marker: L.marker([lat, lng], { icon: truckIcon }).addTo(map),
-                path: L.polyline([], { color: '#2196F3', weight: 5 }).addTo(map),
-                totalDist: 0,
-                lastUpdate: timestamp
-            };
-        }
-
-        const p = plows[id];
-        const oldPos = p.marker.getLatLng();
-        const newPos = L.latLng(lat, lng);
-
-        // 2. ODOMETER LOGIC: Update the distance counter
-        if (reset) {
-            p.path.setLatLngs([]);
-            p.totalDist = 0;
-        } else {
-            p.totalDist += calcDist(oldPos, newPos);
-        }
-
-        p.marker.setLatLng(newPos);
-        p.path.addLatLng(newPos);
-        p.lastUpdate = timestamp;
-        
-        // Auto-follow logic
-        map.panTo(newPos);
-
-        // 3. STATUS & SPEED COLOR LOGIC
-        if (p.marker._icon) {
-            p.marker._icon.style.filter = (status === "Active") 
-                ? "hue-rotate(90deg) brightness(0.8)" // Greenish for Active
-                : "none"; // Original for Idle/Transport
-        }
-
-        // 4. POPUP UPDATE: This is where you see the "Missing" info
-        p.marker.bindPopup(`
-            <div style="font-family: sans-serif;">
-                <b style="font-size: 1.2em;">${name}</b><br>
-                <hr>
-                <b>Speed:</b> ${speed || 0} km/h<br>
-                <b>Odometer:</b> ${p.totalDist.toFixed(2)} km<br>
-                <b>Status:</b> <span style="color: ${status === 'Active' ? 'green' : 'orange'}">${status}</span>
-            </div>
-        `).openPopup();
-    };
-
-    // Heartbeat for "Offline" status
-    setInterval(() => {
-        const now = Date.now();
-        Object.values(plows).forEach(p => {
-            if (now - p.lastUpdate > 5000 && p.marker._icon) { 
-                p.marker._icon.style.filter = "grayscale(100%) opacity(0.5)";
-                p.marker.setPopupContent("<b>OFFLINE / NO SIGNAL</b>");
-            }
+        const truckIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/6932/6932290.png',
+            iconSize: [32, 32], iconAnchor: [16, 16]
         });
-    }, 3000);
 
-    socket.onopen = () => console.log("Connected to Snowplow Server");
-</script>
+        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b'];
+        const plows = {};
+        let selectedPlowId = null;
+        const socket = new WebSocket(`ws://${window.location.host}/ws`);
 
+        socket.onmessage = (event) => {
+            const { id, name, lat, lng, speed, status, reset, timestamp } = JSON.parse(event.data);
+
+            if (!plows[id]) {
+                const colorIdx = Object.keys(plows).length;
+                plows[id] = {
+                    name,
+                    colorIdx,
+                    marker: L.marker([lat, lng], { icon: truckIcon }).addTo(map).bindPopup(`<strong>${name}</strong><br/>Speed: ${speed} km/h`),
+                    path: L.polyline([], { color: colors[colorIdx % colors.length], weight: 4, opacity: 0.7 }).addTo(map),
+                    totalDist: 0,
+                    avgSpeed: 0,
+                    maxSpeed: 0,
+                    speedSamples: [],
+                    lastUpdate: timestamp,
+                    status: status,
+                    routeProgress: 0
+                };
+            }
+
+            const p = plows[id];
+            const oldPos = p.marker.getLatLng();
+            const newPos = L.latLng(lat, lng);
+
+            if (reset) { 
+                p.totalDist = 0; 
+                p.path.setLatLngs([]); 
+                p.speedSamples = [];
+                p.routeProgress = 0;
+            } else { 
+                p.totalDist += (map.distance(oldPos, newPos) / 1000); 
+                p.routeProgress = Math.min(p.routeProgress + 1, 100);
+            }
+
+            p.marker.setLatLng(newPos);
+            p.path.addLatLng(newPos);
+            p.lastUpdate = timestamp;
+            p.status = status;
+
+            // Speed tracking
+            p.speedSamples.push(speed);
+            if (p.speedSamples.length > 100) p.speedSamples.shift();
+            p.avgSpeed = Math.round(p.speedSamples.reduce((a, b) => a + b, 0) / p.speedSamples.length);
+            p.maxSpeed = Math.max(...p.speedSamples);
+
+            updateSidebar();
+        };
+
+        function updateSidebar() {
+            // Update summary stats
+            const activePlows = Object.values(plows).filter(p => Date.now() - p.lastUpdate < 5000).length;
+            const totalMiles = Object.values(plows).reduce((sum, p) => sum + p.totalDist, 0);
+            
+            document.getElementById('active-count').textContent = activePlows;
+            document.getElementById('total-km').textContent = totalMiles.toFixed(1);
+
+            // Update individual cards
+            Object.keys(plows).forEach((id, idx) => {
+                const p = plows[id];
+                let card = document.getElementById(`card-${id}`);
+                
+                if (!card) {
+                    card = document.createElement('div');
+                    card.id = `card-${id}`;
+                    card.addEventListener('click', () => selectPlow(id));
+                    document.getElementById('plow-list').appendChild(card);
+                }
+
+                const isOffline = Date.now() - p.lastUpdate > 5000;
+                const statusClass = isOffline ? 'offline' : p.status.toLowerCase();
+                
+                card.className = `plow-card color-${p.colorIdx} ${statusClass}`;
+                if (selectedPlowId === id) card.classList.add('selected');
+
+                const statusColor = isOffline ? '#95a5a6' : (p.status === 'Active' ? '#2ecc71' : '#f1c40f');
+                const statusText = isOffline ? 'Offline' : p.status;
+
+                card.innerHTML = `
+                    <div class="plow-header">
+                        <div class="plow-name">${p.name}</div>
+                        <div class="status-badge ${statusClass}">
+                            <div class="status-dot"></div>
+                            ${statusText}
+                        </div>
+                    </div>
+                    <div class="plow-stats">
+                        <div class="stat">
+                            <span class="stat-label-small">Distance</span>
+                            <span class="stat-value-small">${p.totalDist.toFixed(1)} km</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label-small">Avg Speed</span>
+                            <span class="stat-value-small">${p.avgSpeed} km/h</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label-small">Max Speed</span>
+                            <span class="stat-value-small">${p.maxSpeed} km/h</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label-small">Progress</span>
+                            <span class="stat-value-small">${Math.round(p.routeProgress)}%</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${p.routeProgress}%"></div>
+                    </div>
+                `;
+            });
+        }
+
+        function selectPlow(id) {
+            selectedPlowId = selectedPlowId === id ? null : id;
+            updateSidebar();
+            
+            if (selectedPlowId) {
+                const p = plows[selectedPlowId];
+                map.fitBounds(p.path.getBounds().pad(0.1));
+                p.path.setStyle({ opacity: 1, weight: 5 });
+            } else {
+                Object.values(plows).forEach(p => {
+                    p.path.setStyle({ opacity: 0.7, weight: 4 });
+                });
+            }
+        }
+
+        // Offline detection
+        setInterval(() => {
+            updateSidebar();
+            Object.keys(plows).forEach(id => {
+                const isOffline = Date.now() - plows[id].lastUpdate > 5000;
+                if (isOffline) {
+                    plows[id].path.setStyle({ opacity: 0.3 });
+                } else {
+                    plows[id].path.setStyle({ opacity: selectedPlowId === id ? 1 : 0.7 });
+                }
+            });
+        }, 2000);
+    </script>
 </body>
 </html>
